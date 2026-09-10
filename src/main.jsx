@@ -18,17 +18,19 @@ const phases=[
 ];
 const tests=[['Bodyweight squat','30 kontrollü'],['Bulgarian split squat','12 + 12'],['Push-up','15–20 temiz'],['Dead hang','30–45 sn'],['Farmer carry','60 sn × 4'],['Step-up','Kesintisiz 5 dk'],['Plank','60 sn'],['Side plank','40 sn / taraf'],['Yüklü yürüyüş','10–15 kg · 15 dk'],['Armor circuit','5 tur'],['Yoğun efor','60 sn · form bozulmadan']];
 const core=['Plank','Side plank','Dead bug','Pallof press','Suitcase carry','Boyun izometrik'];
-const load=()=>{try{return JSON.parse(localStorage.getItem('buhurt-state'))||{week:1,done:{},tests:{}}}catch{return {week:1,done:{},tests:{}}}};
+const fallback={week:1,done:{},tests:{}};
+const storage={get:k=>{try{return localStorage.getItem(k)}catch{return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch{}},remove:k=>{try{localStorage.removeItem(k)}catch{}}};
+const load=()=>{try{const value=JSON.parse(storage.get('buhurt-state'));return value?.week&&value?.done&&value?.tests?value:fallback}catch{return fallback}};
 
 function App(){
  const [state,setState]=useState(load); const [tab,setTab]=useState('home'); const [day,setDay]=useState('mon');
- const [syncCode,setSyncCode]=useState(()=>localStorage.getItem('buhurt-sync-code')||''); const [cloud,setCloud]=useState(syncCode?'loading':'local'); const [syncReady,setSyncReady]=useState(false);
- useEffect(()=>localStorage.setItem('buhurt-state',JSON.stringify(state)),[state]);
- useEffect(()=>{if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js')},[]);
+ const [syncCode,setSyncCode]=useState(()=>storage.get('buhurt-sync-code')||''); const [cloud,setCloud]=useState(syncCode?'loading':'local'); const [syncReady,setSyncReady]=useState(false);
+ useEffect(()=>storage.set('buhurt-state',JSON.stringify(state)),[state]);
+ useEffect(()=>{if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').then(r=>r.update()).catch(()=>{})},[]);
  useEffect(()=>{if(!syncCode){setSyncReady(false);setCloud('local');return}let live=true;setCloud('loading');fetch('/api/progress',{headers:{'x-sync-code':syncCode}}).then(async r=>{const j=await r.json();if(!r.ok)throw Error(j.error);return j}).then(j=>{if(!live)return;if(j.progress)setState(j.progress);setSyncReady(true);setCloud('synced')}).catch(()=>{if(live)setCloud('error')});return()=>{live=false}},[syncCode]);
  useEffect(()=>{if(!syncCode||!syncReady)return;const t=setTimeout(()=>{setCloud('loading');fetch('/api/progress',{method:'PUT',headers:{'content-type':'application/json','x-sync-code':syncCode},body:JSON.stringify({progress:state})}).then(r=>{if(!r.ok)throw Error();setCloud('synced')}).catch(()=>setCloud('error'))},500);return()=>clearTimeout(t)},[state,syncCode,syncReady]);
- const connectCloud=code=>{const clean=code.trim().toUpperCase();localStorage.setItem('buhurt-sync-code',clean);setSyncCode(clean)};
- const disconnectCloud=()=>{localStorage.removeItem('buhurt-sync-code');setSyncCode('')};
+ const connectCloud=code=>{const clean=code.trim().toUpperCase();storage.set('buhurt-sync-code',clean);setSyncCode(clean)};
+ const disconnectCloud=()=>{storage.remove('buhurt-sync-code');setSyncCode('')};
  const phase=phases.find(p=>p.weeks.includes(state.week));
  const key=(d,i)=>`w${state.week}-${d}-${i}`; const doneCount=Object.values(DAYS).reduce((n,d,di)=>n+d.exercises.filter((_,i)=>state.done[key(Object.keys(DAYS)[di],i)]).length,0);
  const total=Object.values(DAYS).reduce((n,d)=>n+d.exercises.length,0); const pct=Math.round(doneCount/total*100);
@@ -76,4 +78,5 @@ function Tests({state,toggle}){const n=tests.filter(([x])=>state.tests[x]).lengt
  <section className="checklist tests">{tests.map(([name,target])=><button className={state.tests[name]?'checked':''} onClick={()=>toggle(name,'tests')} key={name}><span className="check">{state.tests[name]&&<Check size={18}/>}</span><span><strong>{name}</strong><small>{target}</small></span></button>)}</section>
  </>}
 
-createRoot(document.getElementById('root')).render(<App/>);
+class ErrorBoundary extends React.Component{constructor(p){super(p);this.state={error:false}}static getDerivedStateFromError(){return{error:true}}render(){return this.state.error?<div className="booterror"><Shield/><h1>Uygulama açılamadı</h1><p>Eski tarayıcı verileri sorun çıkarmış olabilir.</p><button onClick={()=>{localStorage.clear();location.reload()}}>Verileri temizle ve yeniden aç</button></div>:this.props.children}}
+createRoot(document.getElementById('root')).render(<ErrorBoundary><App/></ErrorBoundary>);
