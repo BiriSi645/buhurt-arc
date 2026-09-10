@@ -1,0 +1,9 @@
+{
+  "name": "Buhurt Pre-Guild Arc",
+  "short_name": "Buhurt Arc",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111310",
+  "theme_color": "#c8ff3d",
+  "icons": [{"src":"/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
