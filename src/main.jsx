@@ -26,6 +26,7 @@ function App(){
  const [state,setState]=useState(load); const [tab,setTab]=useState('home'); const [day,setDay]=useState('mon');
  const [syncCode,setSyncCode]=useState(()=>storage.get('buhurt-sync-code')||''); const [cloud,setCloud]=useState(syncCode?'loading':'local'); const [syncReady,setSyncReady]=useState(false);
  useEffect(()=>storage.set('buhurt-state',JSON.stringify(state)),[state]);
+ useEffect(()=>{if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js',{updateViaCache:'none'}).then(reg=>reg.update()).catch(()=>{})},[]);
  useEffect(()=>{if(!syncCode){setSyncReady(false);setCloud('local');return}let live=true;setCloud('loading');fetch('/api/progress',{headers:{'x-sync-code':syncCode}}).then(async r=>{const j=await r.json();if(!r.ok)throw Error(j.error);return j}).then(j=>{if(!live)return;if(j.progress)setState(j.progress);setSyncReady(true);setCloud('synced')}).catch(()=>{if(live)setCloud('error')});return()=>{live=false}},[syncCode]);
  useEffect(()=>{if(!syncCode||!syncReady)return;const t=setTimeout(()=>{setCloud('loading');fetch('/api/progress',{method:'PUT',headers:{'content-type':'application/json','x-sync-code':syncCode},body:JSON.stringify({progress:state})}).then(r=>{if(!r.ok)throw Error();setCloud('synced')}).catch(()=>setCloud('error'))},500);return()=>clearTimeout(t)},[state,syncCode,syncReady]);
  const connectCloud=code=>{const clean=code.trim().toUpperCase();storage.set('buhurt-sync-code',clean);setSyncCode(clean)};
